@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* The app is a light-mode SaaS dashboard by design: colour is used to carry
+   meaning (match scores, statuses, AI recommendations), and a second palette
+   would mean maintaining two sets of those semantics. */
+html,
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Row separators. Owned here rather than done with Tailwind's `divide-y` so the
+   mobile rules below can override them without a specificity fight. */
+.rtable-body > tr + tr {
+  border-top: 1px solid #f1f5f9;
+}
+
+/* `display: contents` makes this wrapper invisible to layout on desktop; on
+   mobile it becomes the value half of each label/value row. */
+.rtable-cell {
+  display: contents;
+}
+
+/* ---------------------------------------------------------------------------
+   Tables on small screens.
+
+   A seven-column table on a phone is a horizontal scrollbar, and a horizontal
+   scrollbar is a column nobody reads. Below `md` each row becomes a card and
+   each cell a "Label — value" line, with the header row supplying the labels
+   through `data-label`.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .rtable,
+  .rtable tbody,
+  .rtable tr,
+  .rtable td {
+    display: block;
+    width: 100%;
+  }
+
+  .rtable thead {
+    display: none;
+  }
+
+  .rtable-body > tr,
+  .rtable-body > tr + tr {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    margin-bottom: 0.625rem;
+    padding: 0.25rem 0;
+    background-color: #fff;
+  }
+
+  .rtable-body > tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .rtable td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0.875rem;
+  }
+
+  .rtable td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+
+  .rtable-cell {
+    display: block;
+    min-width: 0;
+    text-align: right;
+  }
+
+  /* A cell with no label — the trailing actions column — spans the full width
+     and keeps its buttons left-aligned. */
+  .rtable td[data-label=""]::before {
+    display: none;
+  }
+
+  .rtable td[data-label=""] {
+    padding-top: 0.6rem;
+  }
+
+  .rtable td[data-label=""] .rtable-cell {
+    text-align: left;
+    width: 100%;
+  }
+}

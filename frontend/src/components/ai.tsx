@@ -1,0 +1,373 @@
+"use client";
+
+/**
+ * The AI-facing components: match breakdown, explanation, evidence, the agent
+ * trace, and the human decision panel.
+ *
+ * The design rule throughout is that the AI never looks like the decision.
+ * Its output is presented as a recommendation with its confidence and its
+ * evidence attached, and the human controls sit below it, unfilled.
+ */
+import { useState } from "react";
+
+import type { Screening, Review, Decision } from "@/lib/types";
+import {
+  DECISION_TONE,
+  RECOMMENDATION_LABEL,
+  RECOMMENDATION_TONE,
+  formatDateTime,
+  pct,
+} from "@/lib/format";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  ProgressBar,
+  ScoreRing,
+  Textarea,
+  cx,
+} from "./ui";
+
+/** The five dimension scores plus the overall ring. */
+export function MatchBreakdown({ screening }: { screening: Screening }) {
+  return (
+    <div className="grid gap-6 sm:grid-cols-[auto_1fr] sm:items-center">
+      <div className="flex flex-col items-center gap-3">
+        <ScoreRing value={screening.overall_match} />
+        <div className="text-center">
+          <Badge tone={RECOMMENDATION_TONE[screening.recommendation]}>
+            {RECOMMENDATION_LABEL[screening.recommendation]}
+          </Badge>
+          <p className="mt-2 text-xs text-slate-500">
+            Confidence{" "}
+            <span className="font-semibold text-slate-700">
+              {pct(screening.confidence)}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <ProgressBar label="Skills match" value={screening.skills_match} />
+        <ProgressBar label="Experience match" value={screening.experience_match} />
+        <ProgressBar label="Technology match" value={screening.technology_match} />
+        <ProgressBar label="Education match" value={screening.education_match} />
+        <ProgressBar label="Semantic match" value={screening.semantic_match} />
+      </div>
+    </div>
+  );
+}
+
+/** Strengths, gaps, explanation and the quotes backing them. */
+export function AIExplanation({ screening }: { screening: Screening }) {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Strengths
+          </p>
+          {screening.strengths.length ? (
+            <ul className="mt-2 space-y-1.5">
+              {screening.strengths.map((item) => (
+                <li key={item} className="flex gap-2 text-sm text-slate-700">
+                  <span className="text-emerald-600">✓</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-slate-400">None identified</p>
+          )}
+        </div>
+
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Skill gaps
+          </p>
+          {screening.skill_gaps.length ? (
+            <ul className="mt-2 space-y-1.5">
+              {screening.skill_gaps.map((item) => (
+                <li key={item} className="flex gap-2 text-sm text-slate-700">
+                  <span className="text-amber-600">⚠</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-slate-400">
+              No unmet requirements found
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+          AI explanation
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-700">
+          {screening.explanation || "No explanation was produced."}
+        </p>
+      </div>
+
+      {screening.evidence.length ? (
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Evidence
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Each claim, with the text it came from.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {screening.evidence.map((item, index) => (
+              <li
+                key={`${item.claim}-${index}`}
+                className="rounded-lg bg-slate-50 px-3 py-2"
+              >
+                <p className="text-sm text-slate-700">{item.claim}</p>
+                {item.quote ? (
+                  <p className="mt-1 border-l-2 border-slate-300 pl-2 text-xs italic text-slate-500">
+                    “{item.quote}” — {item.source}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {screening.safety_notes.length ? (
+        <Alert tone="amber">
+          <span className="font-medium">Fairness check:</span>{" "}
+          {screening.safety_notes.join(" ")}
+        </Alert>
+      ) : null}
+
+      <p className="text-xs text-slate-400">
+        Generated by {screening.model_used || "unknown model"} on{" "}
+        {formatDateTime(screening.created_at)}. This is a recommendation for a
+        human reviewer, not a decision.
+      </p>
+    </div>
+  );
+}
+
+/** The agent's own record of what it did, and the passages it retrieved. */
+export function AgentTrace({ screening }: { screening: Screening }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-xs font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+      >
+        {open ? "Hide" : "Show"} agent trace and retrieved context
+      </button>
+
+      {open ? (
+        <div className="mt-3 space-y-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Agent workflow
+            </p>
+            <ol className="mt-2 space-y-1.5">
+              {screening.agent_trace.map((step, index) => (
+                <li key={index} className="flex gap-2.5 text-sm">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-600">
+                    {index + 1}
+                  </span>
+                  <span>
+                    <span className="font-medium text-slate-800">
+                      {step.step.replace(/_/g, " ")}
+                    </span>
+                    <span className="text-slate-500"> — {step.detail}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Retrieved context ({screening.retrieved_context.length} chunks)
+            </p>
+            <div className="mt-2 space-y-2">
+              {screening.retrieved_context.map((chunk, index) => (
+                <div key={index} className="rounded-lg bg-slate-50 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <Badge tone="blue">{chunk.source}</Badge>
+                    <span className="text-[11px] text-slate-500">
+                      similarity {(chunk.score * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <p className="mt-1.5 line-clamp-4 whitespace-pre-wrap text-xs text-slate-600">
+                    {chunk.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const DECISIONS: { value: Decision; label: string; variant: "success" | "warning" | "danger" }[] = [
+  { value: "SHORTLIST", label: "Shortlist", variant: "success" },
+  { value: "HOLD", label: "Hold", variant: "warning" },
+  { value: "REJECT", label: "Reject", variant: "danger" },
+];
+
+/**
+ * The human-in-the-loop panel.
+ *
+ * No decision is preselected, even when the AI is confident. Preselecting one
+ * would make agreeing the default action, which is precisely what a
+ * human-in-the-loop step exists to prevent.
+ */
+export function HitlPanel({
+  screening,
+  onSubmit,
+  submitting,
+  error,
+}: {
+  screening: Screening | null;
+  onSubmit: (decision: Decision, comment: string) => void;
+  submitting: boolean;
+  error?: string;
+}) {
+  const [decision, setDecision] = useState<Decision | null>(null);
+  const [comment, setComment] = useState("");
+
+  const wouldOverride =
+    decision !== null &&
+    screening !== null &&
+    impliedDecision(screening.recommendation) !== decision;
+
+  return (
+    <Card>
+      <CardHeader
+        title="👤 Recruiter review"
+        subtitle="The AI recommends. You decide — this is the only step that changes the outcome."
+      />
+      <CardBody className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {DECISIONS.map((option) => (
+            <Button
+              key={option.value}
+              variant={decision === option.value ? option.variant : "secondary"}
+              onClick={() => setDecision(option.value)}
+            >
+              {decision === option.value ? "● " : ""}
+              {option.label}
+            </Button>
+          ))}
+        </div>
+
+        {wouldOverride ? (
+          <Alert tone="amber">
+            This goes against the AI, which recommended{" "}
+            <span className="font-medium">
+              {RECOMMENDATION_LABEL[screening!.recommendation]}
+            </span>{" "}
+            at {pct(screening!.confidence)} confidence. Your override will be
+            recorded with your reason.
+          </Alert>
+        ) : null}
+
+        <div>
+          <label className="text-xs font-medium text-slate-700">
+            Recruiter comment
+            {decision === "REJECT" ? (
+              <span className="text-rose-600"> (required for a rejection)</span>
+            ) : null}
+          </label>
+          <Textarea
+            value={comment}
+            onChange={setComment}
+            rows={3}
+            placeholder="Why did you decide this? e.g. “No production Kubernetes experience for a platform role.”"
+          />
+        </div>
+
+        {error ? <Alert tone="red">{error}</Alert> : null}
+
+        <Button
+          onClick={() => decision && onSubmit(decision, comment)}
+          disabled={!decision || submitting}
+        >
+          {submitting ? "Saving…" : "Submit decision"}
+        </Button>
+      </CardBody>
+    </Card>
+  );
+}
+
+/** What the AI's label implies, used only to flag an override in the UI. */
+function impliedDecision(recommendation: Screening["recommendation"]): Decision {
+  switch (recommendation) {
+    case "STRONG_MATCH":
+    case "GOOD_MATCH":
+      return "SHORTLIST";
+    case "PARTIAL_MATCH":
+      return "HOLD";
+    default:
+      return "REJECT";
+  }
+}
+
+/** The stored decision history for an application. */
+export function DecisionHistory({ reviews }: { reviews: Review[] }) {
+  if (!reviews.length) return null;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Decision history"
+        subtitle="Every human decision, with what the AI had recommended at the time."
+      />
+      <CardBody className="space-y-3">
+        {reviews.map((review) => (
+          <div
+            key={review.id}
+            className={cx(
+              "rounded-lg border-l-4 bg-slate-50 px-3 py-2.5",
+              review.overrode_ai ? "border-amber-400" : "border-slate-300",
+            )}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={DECISION_TONE[review.decision]}>{review.decision}</Badge>
+              {review.overrode_ai ? (
+                <Badge tone="amber">Overrode the AI</Badge>
+              ) : null}
+              <span className="text-xs text-slate-500">
+                {review.reviewer_name ?? "Recruiter"} ·{" "}
+                {formatDateTime(review.created_at)}
+              </span>
+            </div>
+            <p className="mt-1.5 text-xs text-slate-500">
+              AI recommended{" "}
+              <span className="font-medium text-slate-700">
+                {review.ai_recommendation
+                  ? RECOMMENDATION_LABEL[review.ai_recommendation]
+                  : "nothing (not screened)"}
+              </span>
+              {review.ai_score !== null && review.ai_score !== undefined
+                ? ` at ${pct(review.ai_score)} match, ${pct(review.ai_confidence)} confidence`
+                : ""}
+            </p>
+            {review.comment ? (
+              <p className="mt-1.5 text-sm text-slate-700">“{review.comment}”</p>
+            ) : null}
+          </div>
+        ))}
+      </CardBody>
+    </Card>
+  );
+}
